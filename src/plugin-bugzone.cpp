@@ -30,7 +30,9 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 #include <skivvy-bugzone/plugin-bugzone.h>
 
-#include <algorithm>
+#include <skivvy/types.h>
+
+#include <string>
 
 namespace skivvy { namespace bugzone {
 
@@ -38,20 +40,48 @@ namespace skivvy { namespace bugzone {
 IRC_BOT_PLUGIN(BugzoneIrcBotPlugin);
 PLUGIN_INFO("bugzone", "Bug Tracker", "0.0");
 
+const str STORE_FILE_KEY = "bugzone.store.file";
+const str DEFAULT_STORE_FILE = "bugzone-store.txt";
+
 BugzoneIrcBotPlugin::BugzoneIrcBotPlugin(IrcBot& bot)
 : BasicIrcBotPlugin(bot)
+, store(bot.getf(STORE_FILE_KEY, DEFAULT_STORE_FILE))
 {
 }
 
-BugzoneIrcBotPlugin::~ExampleIrcBotPlugin() {}
+BugzoneIrcBotPlugin::~BugzoneIrcBotPlugin() {}
 
-void BugzoneIrcBotPlugin::do_stuff(const message& msg)
+// Workflow
+
+// new - new bugs
+// fix - fixed
+// die - won't fix
+// dup: #id - duplicate of id
+
+bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
-	str cmd = msg.get_user_cmd(); // this is !do_stuff
-	str params = msg.get_user_params(); // this is any text after the command
+	if(msg.get_user_params().empty())
+		return false;
 
-	bot.fc_reply_pm(msg, "I sent you a PM!");
-	bot.fc_reply(msg, "I did stuff!");
+	lock_guard lock(mtx);
+	siz id = store.get("bug.id", 0);
+	store.set("bug.id", ++id);
+	store.add("bug." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
+	bot.fc_reply(msg, "Your bug has been filed with tracking number " + std::to_string(id));
+	return true;
+}
+
+bool BugzoneIrcBotPlugin::do_feature(const message& msg)
+{
+	if(msg.get_user_params().empty())
+		return false;
+
+	lock_guard lock(mtx);
+	siz id = store.get("feature.id", 0);
+	store.set("feature.id", ++id);
+	store.add("feature." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
+	bot.fc_reply(msg, "Your feature request has been filed with tracking number " + std::to_string(id));
+	return true;
 }
 
 // INTERFACE: BasicIrcBotPlugin
@@ -61,9 +91,15 @@ bool BugzoneIrcBotPlugin::initialize()
 	// Commands MUST start with ! (unless they are sent by PM)
 	add
 	({
-		"!do_stuff"
-		, "!do_stuff Send you a PM and do stuff!"
-		, [&](const message& msg){ do_stuff(msg); }
+		"!bug"
+		, "!bug <description> Record a bug"
+		, [&](const message& msg){ do_bug(msg); }
+	});
+	add
+	({
+		"!feature"
+		, "!feature <description> Request a feature|modification."
+		, [&](const message& msg){ do_feature(msg); }
 	});
 
 	// add more commands as appropriate
@@ -81,11 +117,11 @@ bool BugzoneIrcBotPlugin::initialize()
 
 // INTERFACE: IrcBotPlugin
 
-str ExampleIrcBotPlugin::get_id() const { return ID; }
-str ExampleIrcBotPlugin::get_name() const { return NAME; }
-str ExampleIrcBotPlugin::get_version() const { return VERSION; }
+str BugzoneIrcBotPlugin::get_id() const { return ID; }
+str BugzoneIrcBotPlugin::get_name() const { return NAME; }
+str BugzoneIrcBotPlugin::get_version() const { return VERSION; }
 
-void ExampleIrcBotPlugin::exit()
+void BugzoneIrcBotPlugin::exit()
 {
 	// clean up (stop threads etc...)
 }

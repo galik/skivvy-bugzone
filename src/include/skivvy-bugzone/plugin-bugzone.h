@@ -32,10 +32,17 @@ http://www.gnu.org/licenses/gpl-2.0.html
 '-----------------------------------------------------------------*/
 
 #include <skivvy/ircbot.h>
+#include <skivvy/types.h>
+#include <skivvy/store.h>
+#include <skivvy/logrep.h>
+
+#include <mutex>
 
 namespace skivvy { namespace bugzone {
 
+using namespace skivvy;
 using namespace skivvy::ircbot;
+using namespace skivvy::utils;
 
 /**
  *
@@ -45,10 +52,14 @@ class BugzoneIrcBotPlugin
 {
 private:
 
+	BackupStore store;
+
+	std::mutex mtx;
 	/**
 	 * One of the plugin's functions
 	 */
-	void do_stuff(const message& msg);
+	bool do_bug(const message& msg);
+	bool do_feature(const message& msg);
 
 public:
 	BugzoneIrcBotPlugin(IrcBot& bot);
@@ -60,14 +71,10 @@ public:
 
 	// INTERFACE: IrcBotPlugin
 
-	virtual std::string get_id() const;
-	virtual std::string get_name() const;
-	virtual std::string get_version() const;
+	virtual str get_id() const;
+	virtual str get_name() const;
+	virtual str get_version() const;
 	virtual void exit();
-
-	// INTERFACE: IrcBotMonitor
-
-	virtual void event(const message& msg); // only if you want have IrcBotMonitor
 };
 
 }} // skivvy::bugzone
