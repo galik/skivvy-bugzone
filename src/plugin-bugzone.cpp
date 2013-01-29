@@ -31,6 +31,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy-bugzone/plugin-bugzone.h>
 
 #include <skivvy/types.h>
+#include <skivvy/logrep.h>
 
 #include <string>
 
@@ -46,6 +47,7 @@ const str DEFAULT_STORE_FILE = "bugzone-store.txt";
 BugzoneIrcBotPlugin::BugzoneIrcBotPlugin(IrcBot& bot)
 : BasicIrcBotPlugin(bot)
 , store(bot.getf(STORE_FILE_KEY, DEFAULT_STORE_FILE))
+, chanops(bot, "chanops")
 {
 }
 
@@ -60,19 +62,87 @@ BugzoneIrcBotPlugin::~BugzoneIrcBotPlugin() {}
 
 bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
+	BUG_COMMAND(msg);
 	if(msg.get_user_params().empty())
 		return false;
 
 	lock_guard lock(mtx);
 	siz id = store.get("bug.id", 0);
 	store.set("bug.id", ++id);
-	store.add("bug." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
+	store.add("bug." + std::to_string(id) + ".new", msg.get_userhost() + " \"" + msg.get_user_params() + "\"");
 	bot.fc_reply(msg, "Your bug has been filed with tracking number " + std::to_string(id));
+	return true;
+}
+
+bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
+{
+	BUG_COMMAND(msg);
+	// !buglist *(new|fixed|dead|dups) - list bugs if associated with caller
+
+	str params = msg.get_user_params();
+	bug_var(params);
+	replace(params, ",", " ");
+	bug_var(params);
+
+	siss iss(params);
+
+	str state;
+	str_set stati;
+	while(iss >> state)
+		stati.insert(state);
+
+	bug_var(stati.size());
+
+	str_set keys;
+
+	lock_guard lock(mtx);
+
+	if(stati.empty())
+		keys = store.get_keys_if_wild("bug.*");
+	else
+		for(const str& state: stati)
+			for(const str& key: store.get_keys_if_wild("bug.*.*" + state))
+				keys.insert(key);
+
+	bug_var(keys.size());
+	// key = bug.1.new
+	for(const str& key: keys)
+	{
+		bug_var(key);
+		str skip, id, user, text;
+		siss iss(key);
+		if(!sgl(sgl(iss, skip, '.'), id, '.'))
+		{
+			log("ERROR: unexpected key in bug store: " << key);
+			continue;
+		}
+		bug_var(id);
+		iss.clear();
+		iss.str(store.get(key));
+		if(!sgl(sgl(iss >> user, skip, '"'), text, '"'))
+		{
+			log("ERROR: bad value in bug store: " << key);
+			continue;
+		}
+		bug_var(text);
+
+		bool valid = false;
+
+		if(user == msg.get_userhost())
+			valid = true;
+		else if(chanops && chanops->is_userhost_logged_in(msg.get_userhost()))
+			if(user == chanops->get_userhost_username(msg.get_userhost()))
+				valid = true;
+
+		if(valid)
+			bot.fc_reply(msg, id + " " + text);
+	}
 	return true;
 }
 
 bool BugzoneIrcBotPlugin::do_feature(const message& msg)
 {
+	BUG_COMMAND(msg);
 	if(msg.get_user_params().empty())
 		return false;
 
@@ -94,6 +164,12 @@ bool BugzoneIrcBotPlugin::initialize()
 		"!bug"
 		, "!bug <description> Record a bug"
 		, [&](const message& msg){ do_bug(msg); }
+	});
+	add
+	({
+		"!buglist"
+		, "!buglist *(new|dead|fixed|dups) list your bugs, optionally by category."
+		, [&](const message& msg){ do_buglist(msg); }
 	});
 	add
 	({

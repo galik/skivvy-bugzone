@@ -36,6 +36,8 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/store.h>
 #include <skivvy/logrep.h>
 
+#include <skivvy-chanops/plugin-chanops.h>
+
 #include <mutex>
 
 namespace skivvy { namespace bugzone {
@@ -51,14 +53,16 @@ class BugzoneIrcBotPlugin
 : public BasicIrcBotPlugin
 {
 private:
-
+	std::mutex mtx;
 	BackupStore store;
 
-	std::mutex mtx;
+	IrcBotPluginHandle<ChanopsIrcBotPlugin> chanops;
+
 	/**
 	 * One of the plugin's functions
 	 */
 	bool do_bug(const message& msg);
+	bool do_buglist(const message& msg);
 	bool do_feature(const message& msg);
 
 public:
