@@ -58,6 +58,8 @@ private:
 
 	IrcBotPluginHandle<ChanopsIrcBotPlugin> chanops;
 
+	str get_user(const message& msg);
+
 	/**
 	 * One of the plugin's functions
 	 */

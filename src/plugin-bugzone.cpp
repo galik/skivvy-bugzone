@@ -60,16 +60,31 @@ BugzoneIrcBotPlugin::~BugzoneIrcBotPlugin() {}
 // die - won't fix
 // dup: #id - duplicate of id
 
+const str BUG_ENTRY_PREFIX = "bug.entry.";
+
+str BugzoneIrcBotPlugin::get_user(const message& msg)
+{
+	bug_func();
+	bug_var(chanops);
+	// chanops user | msg.userhost
+	if(chanops && chanops->is_userhost_logged_in(msg.get_userhost()))
+		return chanops->get_userhost_username(msg.get_userhost());
+	return msg.get_userhost();
+}
+
 bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
 	BUG_COMMAND(msg);
 	if(msg.get_user_params().empty())
 		return false;
 
+	str user = get_user(msg);
+	bug_var(user);
+
 	lock_guard lock(mtx);
 	siz id = store.get("bug.id", 0);
 	store.set("bug.id", ++id);
-	store.add("bug." + std::to_string(id) + ".new", msg.get_userhost() + " \"" + msg.get_user_params() + "\"");
+	store.add(BUG_ENTRY_PREFIX + std::to_string(id) + ".new", user + " \"" + msg.get_user_params() + "\"");
 	bot.fc_reply(msg, "Your bug has been filed with tracking number " + std::to_string(id));
 	return true;
 }
@@ -98,20 +113,36 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	lock_guard lock(mtx);
 
 	if(stati.empty())
-		keys = store.get_keys_if_wild("bug.*");
+		keys = store.get_keys_if_wild(BUG_ENTRY_PREFIX + "*");
 	else
 		for(const str& state: stati)
-			for(const str& key: store.get_keys_if_wild("bug.*.*" + state))
+			for(const str& key: store.get_keys_if_wild(BUG_ENTRY_PREFIX + "*." + state))
 				keys.insert(key);
 
 	bug_var(keys.size());
-	// key = bug.1.new
+
+	str user = get_user(msg);
+	bug_var(user);
+
+	// key = bug.entry.1.new
 	for(const str& key: keys)
 	{
 		bug_var(key);
-		str skip, id, user, text;
-		siss iss(key);
-		if(!sgl(sgl(iss, skip, '.'), id, '.'))
+		if(key.size() <= BUG_ENTRY_PREFIX.size())
+			continue;
+
+		siss iss(key.substr(BUG_ENTRY_PREFIX.size()));
+
+		str skip;
+		siz id = 0;
+		if(!(iss >> id))
+		{
+			log("ERROR: unexpected key in bug store: " << key);
+			continue;
+		}
+
+		str status = "unknown";
+		if(!sgl(sgl(iss, skip, '.'), status))
 		{
 			log("ERROR: unexpected key in bug store: " << key);
 			continue;
@@ -119,23 +150,17 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 		bug_var(id);
 		iss.clear();
 		iss.str(store.get(key));
-		if(!sgl(sgl(iss >> user, skip, '"'), text, '"'))
+
+		str quser, text;
+		if(!sgl(sgl(iss >> quser, skip, '"'), text, '"'))
 		{
 			log("ERROR: bad value in bug store: " << key);
 			continue;
 		}
 		bug_var(text);
 
-		bool valid = false;
-
-		if(user == msg.get_userhost())
-			valid = true;
-		else if(chanops && chanops->is_userhost_logged_in(msg.get_userhost()))
-			if(user == chanops->get_userhost_username(msg.get_userhost()))
-				valid = true;
-
-		if(valid)
-			bot.fc_reply(msg, id + " " + text);
+		if(quser == user)
+			bot.fc_reply(msg, status + ": " + std::to_string(id) + " " + text);
 	}
 	return true;
 }
@@ -143,14 +168,14 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 bool BugzoneIrcBotPlugin::do_feature(const message& msg)
 {
 	BUG_COMMAND(msg);
-	if(msg.get_user_params().empty())
-		return false;
-
-	lock_guard lock(mtx);
-	siz id = store.get("feature.id", 0);
-	store.set("feature.id", ++id);
-	store.add("feature." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
-	bot.fc_reply(msg, "Your feature request has been filed with tracking number " + std::to_string(id));
+//	if(msg.get_user_params().empty())
+//		return false;
+//
+//	lock_guard lock(mtx);
+//	siz id = store.get("feature.id", 0);
+//	store.set("feature.id", ++id);
+//	store.add("feature." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
+//	bot.fc_reply(msg, "Your feature request has been filed with tracking number " + std::to_string(id));
 	return true;
 }
 
