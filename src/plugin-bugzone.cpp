@@ -32,10 +32,16 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 #include <skivvy/types.h>
 #include <skivvy/logrep.h>
+#include <skivvy/irc.h>
 
 #include <string>
 
 namespace skivvy { namespace bugzone {
+
+using namespace skivvy;
+using namespace skivvy::irc;
+using namespace skivvy::types;
+using namespace skivvy::ircbot;
 
 // You MUST have this macro and it MUST name your plugin class
 IRC_BOT_PLUGIN(BugzoneIrcBotPlugin);
@@ -72,12 +78,47 @@ str BugzoneIrcBotPlugin::get_user(const message& msg)
 	return msg.get_userhost();
 }
 
+// bug.desc.<id>: Bad stuff happens
+// bug.perp.<id>: sookee|~SooKee@SooKee.users.quakenet.org
+// bug.date.<id>: 2013-02-23
+// bug.asgn.<id>: sookee
+// bug._mod.<id>: rconics
+// bug._eta.<id>: +2 days|2013-02-28
+// bug.stat.<id>: new|fixed|wontfix|etc...
+// bug.note.<id>: Some note
+// bug.note.<id>: Another note
+
+
 bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
 	BUG_COMMAND(msg);
 	if(msg.get_user_params().empty())
 		return false;
 
+	static const str prompt = IRC_BOLD + IRC_COLOR + IRC_Purple + "bug"
+		+ IRC_COLOR + IRC_Black + ": " + IRC_NORMAL;
+	// !bug (#n|<text>) - enter a new bug <text> or examine a curent bug #n by number.
+
+	if(msg.get_user_params()[0] == '#') // list current bug
+	{
+		siz id = 0;
+		if(!(siss(msg.get_user_params().substr(1)) >> id))
+			return bot.cmd_error(msg, prompt + "Expected bug tracking id after # (eg. #2365");
+
+		lock_guard lock(mtx);
+		str_set keys = store.get_keys_if_wild(BUG_ENTRY_PREFIX + std::to_string(id) + ".*");
+
+		for(const str& key: keys)
+		{
+			bug_var(key);
+			str skip, text;
+			if(sgl(sgl(siss(store.get(key)) >> skip, skip, '"'), text, '"'))
+				bot.fc_reply(msg, std::to_string(id) + ": " + text);
+		}
+		return true;
+	}
+
+	// add new bug
 	str user = get_user(msg);
 	bug_var(user);
 
@@ -85,7 +126,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	siz id = store.get("bug.id", 0);
 	store.set("bug.id", ++id);
 	store.add(BUG_ENTRY_PREFIX + std::to_string(id) + ".new", user + " \"" + msg.get_user_params() + "\"");
-	bot.fc_reply(msg, "Your bug has been filed with tracking number " + std::to_string(id));
+	bot.fc_reply(msg, "Your bug has been filed with tracking number #" + std::to_string(id));
 	return true;
 }
 
@@ -94,6 +135,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	BUG_COMMAND(msg);
 	// !buglist *(new|fixed|dead|dups) - list bugs if associated with caller
 
+	static const str prompt = IRC_BOLD + IRC_COLOR + IRC_Green + "bug"
+		+ IRC_COLOR + IRC_Black + ": " + IRC_NORMAL;
 	str params = msg.get_user_params();
 	bug_var(params);
 	replace(params, ",", " ");
@@ -184,6 +227,46 @@ bool BugzoneIrcBotPlugin::do_feature(const message& msg)
 bool BugzoneIrcBotPlugin::initialize()
 {
 	// Commands MUST start with ! (unless they are sent by PM)
+	if(store.get("bugzone.version") == "0.0")
+	{
+		// upgrade
+		log("bugzone: Upgrading store from v0.0 to v0.1");
+
+		// bug.entry.<id>.<state>: <user> "<message"
+
+		siz n;
+		str id, skip, stat, text, user;
+		char c;
+		for(const str& key: store.get_keys_if_wild(BUG_ENTRY_PREFIX + "*"))
+		{
+			if(key.size() <= BUG_ENTRY_PREFIX.size())
+				continue;
+			if(!(siss(key.substr(BUG_ENTRY_PREFIX.size())) >> n >> c >> stat))
+				continue;
+			if(!sgl(sgl(siss(store.get(key)) >> user, skip, '"'), text, '"'))
+				continue;
+
+			id = std::to_string(n);
+			store.add("bug.desc." + id, text);
+			store.add("bug.perp." + id, user);
+			store.add("bug.stat." + id, stat);
+			store.add("bug.note." + id, "Record upgraded from v0.0 to v0.1 (see date for when)");
+			store.add("bug.date." + id, std::to_string(std::time(0)));
+			store.clear(key);
+		}
+
+		// bug.desc.<id>: Bad stuff happens
+		// bug.perp.<id>: sookee|~SooKee@SooKee.users.quakenet.org
+		// bug.date.<id>: 2013-02-23
+		// bug.asgn.<id>: sookee
+		// bug._mod.<id>: rconics
+		// bug._eta.<id>: +2 days|2013-02-28
+		// bug.stat.<id>: new|fixed|wontfix|etc...
+		// bug.note.<id>: Some note
+		// bug.note.<id>: Another note
+
+		store.set("bugzone.version", "0.1");
+	}
 	add
 	({
 		"!bug"
@@ -196,12 +279,12 @@ bool BugzoneIrcBotPlugin::initialize()
 		, "!buglist *(new|dead|fixed|dups) list your bugs, optionally by category."
 		, [&](const message& msg){ do_buglist(msg); }
 	});
-	add
-	({
-		"!feature"
-		, "!feature <description> Request a feature|modification."
-		, [&](const message& msg){ do_feature(msg); }
-	});
+//	add
+//	({
+//		"!feature"
+//		, "!feature <description> Request a feature|modification."
+//		, [&](const message& msg){ do_feature(msg); }
+//	});
 
 	// add more commands as appropriate
 	//add
