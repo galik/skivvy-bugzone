@@ -28,7 +28,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 '-----------------------------------------------------------------*/
 
-#include <skivvy-bugzone/plugin-bugzone.h>
+#include <skivvy/plugin-bugzone.h>
 
 #include <skivvy/types.h>
 #include <skivvy/logrep.h>
