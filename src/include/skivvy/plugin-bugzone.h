@@ -36,7 +36,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/store.h>
 #include <skivvy/logrep.h>
 
-#include <skivvy-chanops/plugin-chanops.h>
+#include <skivvy/plugin-chanops.h>
 
 #include <mutex>
 
