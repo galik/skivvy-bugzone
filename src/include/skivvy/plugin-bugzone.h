@@ -63,6 +63,7 @@ private:
 	/**
 	 * One of the plugin's functions
 	 */
+	void bug_reply(const message& msg, const str& prompt, const str& id);
 	bool do_bug(const message& msg);
 	bool do_buglist(const message& msg);
 	bool do_feature(const message& msg);
