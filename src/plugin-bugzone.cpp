@@ -34,6 +34,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/logrep.h>
 #include <skivvy/irc.h>
 #include <skivvy/cal.h>
+#include <skivvy/ios.h>
 
 #include <string>
 #include <ctime>
@@ -136,6 +137,11 @@ void BugzoneIrcBotPlugin::bug_reply(const message& msg, const str& prompt, const
 		bot.fc_reply(msg, prompt + "  note: " + note);
 }
 
+str stamp(time_t now = std::time(0))
+{
+	return cal::date_t(now).format(cal::date_t::FORMAT_ISO_8601);
+}
+
 bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
 	BUG_COMMAND(msg);
@@ -146,16 +152,71 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	static const str prompt = IRC_BOLD + IRC_COLOR + IRC_Purple + "bug"
 		+ IRC_COLOR + IRC_Black + ": " + IRC_NORMAL;
 
-	// !bug (#n|<text>) - enter a new bug <text> or examine a curent bug #n by number.
+	// !bug <text> - enter a new bug with desc(ription) <text>
+	// !bug #n - display a curent bug #n by number.
+	// !bug #n +(note|eta|stat|asgn|mod) <text> - add notes, change status, eta etc...
 
 	if(msg.get_user_params()[0] == '#') // list current bug
 	{
 		siz n = 0;
-		if(!(siss(msg.get_user_params().substr(1)) >> n))
+		siss iss(msg.get_user_params().substr(1));
+		if(!(iss >> n))
 			return bot.cmd_error(msg, prompt + "Expected bug tracking id after # (eg. #2365");
 
+		str id = std::to_string(n);
+
+		static const str_map attrs =
+		{
+			{"note", "note"}
+			, {"eta", "_eta"}
+			, {"status", "stat"}
+			, {"assign", "asgn"}
+			, {"mod", "_mod"}
+		};
+
+		static const str_set stats = {"new","open","fixed","wontfix","deleted"};
+
+		str line, attr, text;
+		while(sgl(iss, line, '+'))
+		{
+			if(rtrim(line).empty())
+				continue;
+
+			if(!ios::getstring(siss(line) >> attr >> std::ws, text))
+			{
+				log("ERROR: Expected: +(note|eta|stat|asgn|mod) <text>");
+				continue;
+			}
+
+			trim(attr);
+			trim(text);
+			bug_var(attr);
+			bug_var(text);
+
+			if(attr == "note") // additive
+			{
+				store.add(BUG_NOTE_PREFIX + id, stamp() + ": " + text);
+			}
+			else if(attrs.find(attr) != attrs.end())
+			{
+				attr = attrs.at(attr);
+
+				if(attr == "stat" && stats.find(text) == stats.end())
+				{
+					log("ERROR: Unknown status: " << text);
+					continue;
+				}
+
+				store.set("bug." + attr + '.' + id, stamp() + ": " + text);
+			}
+			else
+			{
+				log("ERROR: Unknown attribute: " << attr);
+			}
+		}
+
 		lock_guard lock(mtx);
-		bug_reply(msg, prompt, std::to_string(n));
+		bug_reply(msg, prompt, id);
 
 		return true;
 	}
