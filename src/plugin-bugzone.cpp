@@ -76,6 +76,8 @@ const str BUG_STAT_A = "assigned";
 const str BUG_STAT_W = "wontfix";
 const str BUG_STAT_F = "fixed";
 
+const str BUG_DEV_KEY = "dev";
+
 // bug.desc.<id>: Bad stuff happens
 // bug.perp.<id>: sookee|~SooKee@SooKee.users.quakenet.org
 // bug.stat.<id>: new|fixed|wontfix|etc...
@@ -206,6 +208,14 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 					log("ERROR: Unknown status: " << text);
 					continue;
 				}
+				else if(attr == "asgn")
+				{
+					if(!stl::found(store.get_vec(BUG_DEV_KEY), text))
+					{
+						log("ERROR: Unknown developer: " << text);
+						continue;
+					}
+				}
 
 				store.set("bug." + attr + '.' + id, stamp() + ": " + text);
 			}
@@ -239,7 +249,6 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	str id = std::to_string(store.get<siz>("bug.id", 0) + 1);
 
 	store.set("bug.id", id);
-
 
 	store.add(BUG_DESC_PREFIX + id, msg.get_user_params());
 	store.add(BUG_PERP_PREFIX + id, user);
@@ -409,18 +418,6 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 
 			bug_var(date);
 
-//			tm t;
-//			time_t tt = 0;
-//			t = *gmtime(&tt);
-//
-//			t.tm_mday = d;
-//			t.tm_mon = m - 1;
-//			t.tm_year = y - 1900;
-//			t.tm_isdst = 0;
-//
-//			std::time_t time = std::mktime(&t);
-//			date = std::to_string(time);
-
 			if(oper == "=")
 				dates_eq.insert(date);
 			else if(oper == "<")
@@ -463,14 +460,6 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				if(RE("bug\\.[^.]+\\.([^:]+)").FullMatch(key, &id))
 					{ ids.insert(id); break; }
 
-
-//	inline
-//	year_t get_year(time_t u = time(0))
-//	{
-//		return gmtime(&u)->tm_year + 1900;
-//	}
-
-
 	bug("Erasing keys based in date:");
 	str store_date;
 	for(str_set::iterator idi = ids.begin(); idi != ids.end();)
@@ -508,6 +497,18 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 
 	for(const str& id: ids)
 		bug_reply(msg, prompt, id);
+
+	return true;
+}
+
+bool BugzoneIrcBotPlugin::do_dev(const message& msg)
+{
+	BUG_COMMAND(msg);
+
+	// !dev add <dev-handle> <email> "name" ?({chanops: <chanops-user>})
+	// !dev <dev-handle> +chanops <chanops-user> // link with chanops, tag dev
+	// !dev <dev-handle> -chanops <chanops-user> // remove chanops tag from dev
+
 
 	return true;
 }
@@ -590,13 +591,12 @@ bool BugzoneIrcBotPlugin::initialize()
 //		, [&](const message& msg){ do_feature(msg); }
 //	});
 
-	// add more commands as appropriate
-	//add
-	//({
-	//	"!do_other_stuff"
-	//	, "!do_other_stuff Do other stuff!"
-	//	, [&](const message& msg){ do_other_stuff(msg); }
-	//});
+	add
+	({
+		"!dev"
+		, "!dev (add|mod|info|) <text>"
+		, [&](const message& msg){ do_dev(msg); }
+	});
 
 	//bot.add_monitor(*this);
 
