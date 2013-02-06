@@ -109,9 +109,9 @@ str BugzoneIrcBotPlugin::get_user(const message& msg)
 	bug_func();
 	bug_var(chanops);
 	// chanops user | msg.userhost
-	if(chanops && chanops->is_userhost_logged_in(msg.get_userhost()))
-		return chanops->get_userhost_username(msg.get_userhost());
-	return msg.get_userhost();
+	if(chanops && chanops->is_userhost_logged_in(msg.get_userhost_cp()))
+		return chanops->get_userhost_username(msg.get_userhost_cp());
+	return msg.get_userhost_cp();
 }
 
 // bug.desc.<id>: Bad stuff happens
@@ -148,7 +148,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
 	BUG_COMMAND(msg);
 
-	if(msg.get_user_params().empty())
+	if(msg.get_user_params_cp().empty())
 		return false;
 
 	static const str prompt = IRC_BOLD + IRC_COLOR + IRC_Purple + "bug"
@@ -158,10 +158,10 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	// !bug #n - display a curent bug #n by number.
 	// !bug #n +(note|eta|stat|asgn|mod) <text> - add notes, change status, eta etc...
 
-	if(msg.get_user_params()[0] == '#') // list current bug
+	if(msg.get_user_params_cp()[0] == '#') // list current bug
 	{
 		siz n = 0;
-		siss iss(msg.get_user_params().substr(1));
+		siss iss(msg.get_user_params_cp().substr(1));
 		if(!(iss >> n))
 			return bot.cmd_error(msg, prompt + "Expected bug tracking id after # (eg. #2365");
 
@@ -250,7 +250,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 
 	store.set("bug.id", id);
 
-	store.add(BUG_DESC_PREFIX + id, msg.get_user_params());
+	store.add(BUG_DESC_PREFIX + id, msg.get_user_params_cp());
 	store.add(BUG_PERP_PREFIX + id, user);
 	store.add(BUG_DATE_PREFIX + id, cal::date_t(std::time(0)).format(cal::date_t::FORMAT_ISO_8601));
 	store.add(BUG_STAT_PREFIX + id, BUG_STAT_N);
@@ -282,7 +282,7 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	str_set dates_ge;
 
 	str attr, line;
-	siss iss(msg.get_user_params());
+	siss iss(msg.get_user_params_cp());
 
 	while(sgl(iss, line, '+'))
 	{
