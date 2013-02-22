@@ -502,14 +502,37 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	return true;
 }
 
+struct dev_t
+{
+	str handle;
+	str chanops;
+
+	friend soss& operator<<(soss& oss, const dev_t dev)
+	{
+		oss << '{' << dev.handle << ' ' << dev.chanops << '}';
+		return oss;
+	}
+
+	friend siss& operator>>(siss& iss, dev_t dev)
+	{
+		str o;
+		if(!getobject(iss, o) || !(siss(o) >> dev.handle >> dev.chanops))
+			log("ERROR: bugzone: protocol error");
+		return iss;
+	}
+};
+
 bool BugzoneIrcBotPlugin::do_dev(const message& msg)
 {
 	BUG_COMMAND(msg);
+
+	// !dev (add|mod|info|) <text>
 
 	// !dev add <dev-handle> <email> "name" ?({chanops: <chanops-user>})
 	// !dev <dev-handle> +chanops <chanops-user> // link with chanops, tag dev
 	// !dev <dev-handle> -chanops <chanops-user> // remove chanops tag from dev
 
+	// dev.<dev-handle>:
 
 	return true;
 }
