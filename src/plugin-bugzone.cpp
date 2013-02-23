@@ -35,6 +35,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/irc.h>
 #include <skivvy/cal.h>
 #include <skivvy/ios.h>
+#include <skivvy/utils.h>
 
 #include <string>
 #include <ctime>
@@ -145,6 +146,31 @@ str stamp(time_t now = std::time(0))
 	return cal::date_t(now).format(cal::date_t::FORMAT_ISO_8601);
 }
 
+static const str_map attrs =
+{
+	{"note", "note"}
+	, {"eta", "_eta"}
+	, {"status", "stat"}
+	, {"assign", "asgn"}
+	, {"mod", "_mod"}
+	, {"dup", "_dup"}
+};
+
+static const str_set stats = {"new","open","fixed","wontfix","deleted"};
+
+// negate opper
+// (<=|>=|<|>|=)
+const str_map nopers = {{"<=",">"},{">=","<"},{"<",">="},{">","<="},{"=","="}};
+
+template<typename Container>
+str join(const Container& c, const str& sep = ", ")
+{
+	str s, ret;
+	for(const str& v: c)
+		{ ret += s + v; s = sep; }
+	return ret;
+}
+
 bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
 	BUG_COMMAND(msg);
@@ -157,9 +183,9 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 
 	// !bug <text> - enter a new bug with desc(ription) <text>
 	// !bug #n - display a curent bug #n by number.
-	// !bug #n +(note|eta|stat|asgn|mod) <text> - add notes, change status, eta etc...
+	// !bug #n +(note|eta|status|assign|mod|dup) <text> - add notes, change status, eta etc...
 
-	if(msg.get_user_params()[0] == '#') // list current bug
+	if(msg.get_user_params()[0] == '#') // print or edit current bug
 	{
 		siz n = 0;
 		siss iss(msg.get_user_params().substr(1));
@@ -167,17 +193,6 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 			return bot.cmd_error(msg, prompt + "Expected bug tracking id after # (eg. #2365");
 
 		str id = std::to_string(n);
-
-		static const str_map attrs =
-		{
-			{"note", "note"}
-			, {"eta", "_eta"}
-			, {"status", "stat"}
-			, {"assign", "asgn"}
-			, {"mod", "_mod"}
-		};
-
-		static const str_set stats = {"new","open","fixed","wontfix","deleted"};
 
 		str line, attr, text;
 		while(sgl(iss, line, '+'))
@@ -187,7 +202,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 
 			if(!ios::getstring(siss(line) >> attr >> std::ws, text))
 			{
-				log("ERROR: Expected: +(note|eta|stat|asgn|mod) <text>");
+				bot.fc_reply(msg, REPLY_PROMPT + "Expected: +(note|eta|status|assign|mod|dup) <text>");
 				continue;
 			}
 
@@ -206,28 +221,40 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 
 				if(attr == "stat" && stats.find(text) == stats.end())
 				{
-					log("ERROR: Unknown status: " << text);
+					bot.fc_reply(msg, REPLY_PROMPT + "Unknown status: " + text + ", use: " + join(stats));
 					continue;
 				}
 				else if(attr == "asgn")
 				{
 					if(!stl::found(store.get_vec(BUG_DEV_KEY), text))
 					{
-						log("ERROR: Unknown developer: " << text);
+						bot.fc_reply(msg, REPLY_PROMPT + "Unknown developer: " + text);
 						continue;
 					}
 				}
-
+				else if(attr == "_dup")
+				{
+					siz n;
+					if(text.empty() || text[0] != '#' || !(siss(text).ignore() >> n))
+					{
+						bot.fc_reply(msg, REPLY_PROMPT + "Expected bug number #<n>");
+						continue;
+					}
+				}
 				store.set("bug." + attr + '.' + id, stamp() + ": " + text);
+				bot.fc_reply(msg, REPLY_PROMPT + "done.");
 			}
 			else
 			{
 				log("ERROR: Unknown attribute: " << attr);
+				bot.fc_reply(msg, REPLY_PROMPT + "Unknown attribute: " + attr
+					+  "Expected: +(note|eta|status|assign|mod|dup) <text>");
+				continue;
 			}
 		}
 
 		lock_guard lock(mtx);
-		bug_reply(msg, prompt, id);
+		bug_reply(msg, REPLY_PROMPT, id);
 
 		return true;
 	}
@@ -256,7 +283,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	store.add(BUG_DATE_PREFIX + id, cal::date_t(std::time(0)).format(cal::date_t::FORMAT_ISO_8601));
 	store.add(BUG_STAT_PREFIX + id, BUG_STAT_N);
 
-	bot.fc_reply(msg, "Your bug has been filed with tracking number #" +id);
+	bot.fc_reply(msg, REPLY_PROMPT + "Your bug has been filed with tracking number #" +id);
 	return true;
 }
 
@@ -269,8 +296,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 
 	// !blist +stat = new, dead +stat = fixed +date <= (now|date)
 
-	static const str prompt = IRC_BOLD + IRC_COLOR + IRC_Green + "blist"
-		+ IRC_COLOR + IRC_Black + ": " + IRC_NORMAL;
+//	static const str prompt = IRC_BOLD + IRC_COLOR + IRC_Green + "blist"
+//		+ IRC_COLOR + IRC_Black + ": " + IRC_NORMAL;
 
 	// TODO: finish this
 //	return bot.cmd_error(msg, "Feature incomplete.");
@@ -292,16 +319,19 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 
 		bug_var(line);
 
-		if(!line.find("stat"))
+		if(!line.find("status"))
 		{
 			if(!sgl(sgl(siss(line), attr, '='), line))
 			{
-				log("ERROR: Expected: stat = (new|fixed|dup|...)");
+				log("ERROR: Expected: status = (new|fixed|dup|...)");
 				continue;
 			}
 
 			trim(attr);
 			trim(line);
+
+			if(attrs.count(attr))
+				attr = attrs.at(attr); // normalize
 
 			bug_var(attr);
 			bug_var(line);
@@ -320,12 +350,15 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 
 			if(!RE("([^<=>]+)(<=|>=|<|>|=)([^<=>]+)").FullMatch(line, &attr, &oper, &date))
 			{
-				log("ERROR: Expected: date (<=|>=|<|>|=) 31/12/9999");
+				bot.fc_reply(msg, REPLY_PROMPT + "Expected: +date (<=|>=|<|>|=) 31/12/9999");
 				continue;
 			}
 
 			trim(attr);
 			trim(date);
+
+			if(attrs.count(attr))
+				attr = attrs.at(attr); // normalize
 
 			bug_var(attr);
 			bug_var(oper);
@@ -345,12 +378,18 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 			{
 				cal::date_t d(time(0));
 				date = d.format(cal::date_t::FORMAT_ISO_8601);
+
+				if(nopers.count(oper))
+					oper = nopers.at(oper);
 			}
 			else if(date == "yesterday")
 			{
 				cal::date_t cdate(time(0));
 				cdate.dec_day();
 				date = cdate.format(cal::date_t::FORMAT_ISO_8601);
+
+				if(nopers.count(oper))
+					oper = nopers.at(oper);
 			}
 			else if(RE("(\\d+)\\s+days?").FullMatch(date, &d))
 			{
@@ -363,6 +402,9 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				while(--d)
 					cdate.dec_day();
 				date = cdate.format(cal::date_t::FORMAT_ISO_8601);
+
+				if(nopers.count(oper))
+					oper = nopers.at(oper);
 			}
 			else if(RE("(\\d+)\\s+weeks?").FullMatch(date, &d))
 			{
@@ -376,6 +418,9 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				while(--d)
 					cdate.dec_day();
 				date = cdate.format(cal::date_t::FORMAT_ISO_8601);
+
+				if(nopers.count(oper))
+					oper = nopers.at(oper);
 			}
 			else if(RE("(\\d+)\\s+months?").FullMatch(date, &d))
 			{
@@ -388,6 +433,9 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				while(--d)
 					cdate.dec_month();
 				date = cdate.format(cal::date_t::FORMAT_ISO_8601);
+
+				if(nopers.count(oper))
+					oper = nopers.at(oper);
 			}
 			else if(RE("(\\d+)\\s+years?").FullMatch(date, &d))
 			{
@@ -395,6 +443,9 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				while(--d)
 					cdate.dec_year();
 				date = cdate.format(cal::date_t::FORMAT_ISO_8601);
+
+				if(nopers.count(oper))
+					oper = nopers.at(oper);
 			}
 			else if(RE("\\d{4}-\\d{2}-\\d{2}").FullMatch(date))
 			{
@@ -442,7 +493,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 		}
 	}
 
-	//
+	if(stats.empty())
+		stats.insert("*");
 
 	bug_cnt(stats);
 	bug_cnt(dates_eq);
@@ -457,7 +509,7 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	bug("Adding ids based in stat:");
 	for(const str& key: store.get_keys_if_wild(BUG_STAT_PREFIX + "*"))
 		for(const str& stat: stats)
-			if(stat == store.get(key))
+			if(stat == "*" || stat == store.get(key))
 				if(RE("bug\\.[^.]+\\.([^:]+)").FullMatch(key, &id))
 					{ ids.insert(id); break; }
 
@@ -497,7 +549,7 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	lock_guard lock(mtx);
 
 	for(const str& id: ids)
-		bug_reply(msg, prompt, id);
+		bug_reply(msg, REPLY_PROMPT, id);
 
 	return true;
 }
