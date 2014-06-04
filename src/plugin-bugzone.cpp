@@ -35,6 +35,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/irc.h>
 #include <skivvy/cal.h>
 #include <skivvy/ios.h>
+#include <skivvy/utils.h>
 
 #include <string>
 #include <ctime>
