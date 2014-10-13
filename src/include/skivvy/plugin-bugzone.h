@@ -31,16 +31,23 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 '-----------------------------------------------------------------*/
 
+#include <sookee/types/basic.h>
+#include <sookee/log.h>
+#include <sookee/bug.h>
+
 #include <skivvy/ircbot.h>
-#include <skivvy/types.h>
 #include <skivvy/store.h>
-#include <skivvy/logrep.h>
+//#include <skivvy/logrep.h>
 
 #include <skivvy/plugin-chanops.h>
 
 #include <mutex>
 
 namespace skivvy { namespace bugzone {
+
+using namespace sookee::types;
+using namespace sookee::log;
+using namespace sookee::bug;
 
 using namespace skivvy;
 using namespace skivvy::ircbot;

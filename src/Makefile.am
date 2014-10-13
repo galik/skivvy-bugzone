@@ -57,7 +57,7 @@ plugin_library_LTLIBRARIES =  \
 
 # IrcBot plugins
 skivvy_plugin_bugzone_la_SOURCES = plugin-bugzone.cpp
-skivvy_plugin_bugzone_la_LDFLAGS = -module -avoid-version $(PLUGIN_FLAGS)
+skivvy_plugin_bugzone_la_LDFLAGS = -module -avoid-version -export-dynamic $(PLUGIN_FLAGS)
 skivvy_plugin_bugzone_la_LIBADD =  $(LIB_SOOKEE) $(LIB_SKIVVY) -L.libs
 
 plugin_manuals_DATA = $(top_srcdir)/docs/bugzone-manual.text

@@ -30,8 +30,12 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 #include <skivvy/plugin-bugzone.h>
 
-#include <skivvy/types.h>
-#include <skivvy/logrep.h>
+#include <sookee/types/basic.h>
+#include <sookee/log.h>
+#include <sookee/bug.h>
+
+#include <skivvy/stl.h>
+//#include <skivvy/logrep.h>
 #include <skivvy/irc.h>
 #include <skivvy/cal.h>
 #include <skivvy/ios.h>
@@ -44,9 +48,14 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 namespace skivvy { namespace bugzone {
 
+using namespace sookee;
+using namespace sookee::types;
+using namespace sookee::log;
+using namespace sookee::bug;
+
 using namespace skivvy;
 using namespace skivvy::irc;
-using namespace skivvy::types;
+//using namespace skivvy::types;
 using namespace skivvy::ircbot;
 
 using namespace pcrecpp;
