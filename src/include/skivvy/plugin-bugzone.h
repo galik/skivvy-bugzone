@@ -39,7 +39,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/store.h>
 //#include <skivvy/logrep.h>
 
-#include <skivvy/plugin-chanops.h>
+//#include <skivvy/plugin-chanops.h>
 
 #include <mutex>
 
@@ -63,7 +63,7 @@ private:
 	std::mutex mtx;
 	BackupStore store;
 
-	IrcBotPluginHandle<ChanopsIrcBotPlugin> chanops;
+	IrcBotPluginHandle chanops;
 
 	str get_user(const message& msg);
 

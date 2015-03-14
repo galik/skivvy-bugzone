@@ -29,6 +29,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 '-----------------------------------------------------------------*/
 
 #include <skivvy/plugin-bugzone.h>
+#include <skivvy/plugin-chanops.h>
 
 #include <sookee/types/basic.h>
 #include <sookee/log.h>
@@ -40,6 +41,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/cal.h>
 #include <skivvy/ios.h>
 #include <skivvy/utils.h>
+#include <skivvy/logrep.h>
 
 #include <string>
 #include <ctime>
@@ -120,8 +122,14 @@ str BugzoneIrcBotPlugin::get_user(const message& msg)
 	bug_var(chanops);
 	str userhost = msg.get_userhost();
 	// chanops user | msg.userhost
-	if(chanops && chanops->is_userhost_logged_in(userhost))
-		return chanops->get_userhost_username(userhost);
+
+	if(chanops && chanops->api(ChanopsApi::is_userhost_logged_in, {userhost}).empty())
+	{
+		str_vec r = chanops->api(ChanopsApi::get_userhost_username, {userhost});
+		if(!r.empty())
+			return r[0];
+	}
+
 	return userhost;
 }
 
@@ -296,7 +304,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	return true;
 }
 
-#define bug_cnt(c) do{bug(#c << ':');for(auto v: c) bug('\t' << v);}while(false)
+//#define bug_cnt(c) do{bug(#c << ':');for(auto v: c) bug('\t' << v);}while(false)
 
 bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 {
