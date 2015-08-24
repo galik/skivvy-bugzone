@@ -1,12 +1,10 @@
 /*
- * plugin-bugzone.cpp
- *
  *  Created on: 28 Jan 2013
  *      Author: oaskivvy@gmail.com
  */
 
 /*-----------------------------------------------------------------.
-| Copyright (C) 2012 SooKee oaskivvy@gmail.com               |
+| Copyright (C) 2012 SooKee oaskivvy@gmail.com                     |
 '------------------------------------------------------------------'
 
 This program is free software; you can redistribute it and/or
@@ -81,7 +79,7 @@ const str BUG_ASGN_PREFIX = "bug.asgn.";
 const str BUG__MOD_PREFIX = "bug._mod.";
 const str BUG__ETA_PREFIX = "bug._eta.";
 const str BUG_DEPS_PREFIX = "bug.deps."; // depends on
-const str BUG__DUP_PREFIX = "bug._dup."; // dulicate of
+const str BUG__DUP_PREFIX = "bug._dup."; // duplicate of
 
 const str BUG_STAT_N = "new";
 const str BUG_STAT_A = "assigned";
