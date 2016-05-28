@@ -94,7 +94,7 @@ const str BUG_STAT_A = "assigned";
 const str BUG_STAT_W = "wontfix";
 const str BUG_STAT_F = "fixed";
 
-const str BUG_DEV_KEY = "dev";
+const auto BUG_DEV_KEY = store2::make_whole_key("dev");
 
 // bug.desc.<id>: Bad stuff happens
 // bug.perp.<id>: sookee|~SooKee@SooKee.users.quakenet.org
@@ -194,6 +194,14 @@ str join(const Container& c, const str& sep = ", ")
 	return ret;
 }
 
+str to_id(int n)
+{
+	str s = std::to_string(n);
+	if(s.size() < 6)
+		s = str(6 - s.size(), '0') + s;
+	return s;
+}
+
 bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 {
 	BUG_COMMAND(msg);
@@ -215,7 +223,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 		if(!(iss >> n))
 			return bot.cmd_error(msg, prompt + "Expected bug tracking id after # (eg. #2365");
 
-		str id = std::to_string(n);
+		str id = to_id(n);
 
 		str line, attr, text;
 		while(sgl(iss, line, '+'))
@@ -298,7 +306,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	// bug.note.<id>: Another note
 
 	lock_guard lock(mtx);
-	str id = std::to_string(store->get(BUG_PREFIX/"last"/"id", 0) + 1);
+	str id = to_id(store->get(BUG_PREFIX/"last"/"id", 0) + 1);
 
 	store->set(BUG_PREFIX/"last"/"id", id);
 
@@ -757,7 +765,7 @@ bool BugzoneIrcBotPlugin::initialize()
 			if(!sgl(sgl(siss(store->get(key)) >> user, skip, '"'), text, '"'))
 				continue;
 
-			id = std::to_string(n);
+			id = to_id(n);
 			store->add(BUG_DESC_PREFIX/id, text);
 			store->add(BUG_PERP_PREFIX/id, user);
 			store->add(BUG_STAT_PREFIX/id, stat);
