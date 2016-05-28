@@ -274,6 +274,7 @@ class basic_key
 public:
 	using array_type = std::array<str, PartialSize>;
 	using iterator = typename array_type::iterator;
+	using const_iterator = typename array_type::const_iterator;
 
 private:
 	friend class Store;
@@ -293,7 +294,7 @@ private:
 	}
 
 	template<size_t M, size_t N>
-	basic_key<M, N> left_key()
+	basic_key<M, N> left_key() const
 	{
 		static_assert(N <= M, "left key must be smaller than key");
 
@@ -328,8 +329,17 @@ public:
 	constexpr uns size() const { return WholeSize; }
 	constexpr uns partial_size() const { return PartialSize; }
 
+	str& front() { return keys.front(); }
+	str& back() { return keys.back(); }
+
+	str const& front() const { return keys.front(); }
+	str const& back() const { return keys.back(); }
+
 	iterator begin() { return keys.begin(); }
 	iterator end() { return keys.end(); }
+
+	const_iterator begin() const { return keys.begin(); }
+	const_iterator end() const { return keys.end(); }
 
 	bool full() const { return keys.size() == WholeSize; }
 	bool partial() const { return !full(); }
@@ -349,9 +359,11 @@ public:
 	}
 
 //	template<size_t M, size_t N>
-	basic_key<WholeSize, PartialSize + 1> operator+(const str& field) const
+	basic_key<WholeSize, PartialSize + 1> operator/(const str& field) const
 	{
-		return basic_key<WholeSize, PartialSize + 1>();
+		auto key = left_key<WholeSize, PartialSize + 1>();
+		key.back() = field;
+		return key;
 	}
 
 	void parse(const str& s, char delim = '.')
@@ -457,7 +469,7 @@ public:
 		return t;
 	}
 
-	template<size_t Size, typename T>
+	template<typename T, size_t Size>
 	T get_at(const key<Size>& k, siz n, const T& dflt = T())
 	{
 		T t;
@@ -474,7 +486,7 @@ public:
 		return get_at(k, 0, dflt);
 	}
 
-	template<size_t Size, typename T>
+	template<typename T, size_t Size>
 	T get(const key<Size>& k, const T& dflt = T())
 	{
 		return get_at(k, 0, dflt);
@@ -495,7 +507,7 @@ public:
 		set_at(k, 0, v);
 	}
 
-	template<size_t Size, typename T>
+	template<typename T, size_t Size>
 	void set(const key<Size>& k, const T& v)
 	{
 		if(!k.full())
@@ -512,7 +524,7 @@ public:
 		add(k, oss.str());
 	}
 
-	template<size_t Size, typename T>
+	template<typename T, size_t Size>
 	void add(const key<Size>& k, const T& v)
 	{
 		if(!k.full())
@@ -531,7 +543,7 @@ public:
 		set_at(k, n, oss.str());
 	}
 
-	template<size_t Size, typename T>
+	template<typename T, size_t Size>
 	void set_at(const key<Size>& k, siz n, const T& v)
 	{
 		if(!k.full())
