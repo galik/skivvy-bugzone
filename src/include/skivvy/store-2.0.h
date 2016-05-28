@@ -348,6 +348,12 @@ public:
 		return left_key<N, N>();
 	}
 
+//	template<size_t M, size_t N>
+	basic_key<WholeSize, PartialSize + 1> operator+(const str& field) const
+	{
+		return basic_key<WholeSize, PartialSize + 1>();
+	}
+
 	void parse(const str& s, char delim = '.')
 	{
 		const auto done = s.end();
@@ -381,7 +387,19 @@ template<size_t Size>
 using whole_key = basic_key<Size, Size>;
 
 template<size_t WholeSize, size_t PartialSize = WholeSize>
-using partial_key = basic_key<PartialSize, WholeSize>;
+using partial_key = basic_key<WholeSize, PartialSize>;
+
+template<typename... Args>
+auto make_whole_key(Args&&... args)
+{
+	return whole_key<sizeof...(Args)>(std::forward<Args>(args)...);
+}
+
+template<size_t WholeSize, typename... Args>
+auto make_partial_key(Args&&... args)
+{
+	return partial_key<WholeSize, sizeof...(Args)>(std::forward<Args>(args)...);
+}
 
 // store
 
@@ -552,8 +570,8 @@ public:
 		left_key<WholeSize, PartialSize> lk;
 	}
 
-	template<size_t Size>
-	bool key_match(const key<Size>& k, const str& s)
+	template<size_t WholeSize, size_t PartialSize>
+	bool key_match(const basic_key<WholeSize, PartialSize>& k, const str& s)
 	{
 //		bug_fun();
 //		bug_var(Size);
@@ -562,18 +580,18 @@ public:
 
 //		bug_cnt(parts);
 
-		if(parts.size() < Size)
+		if(parts.size() < PartialSize)
 			return false;
 
-		for(auto i = 0U; i < Size; ++i)
+		for(auto i = 0U; i < PartialSize; ++i)
 			if(k[i] != parts[i])
 				return false;
 
 		return true;
 	}
 
-	template<size_t Size>
-	str_set get_keys_that_match(const key<Size>& k)
+	template<size_t WholeSize, size_t PartialSize>
+	str_set get_keys_that_match(const basic_key<WholeSize, PartialSize>& k)
 	{
 //		bug_fun();
 //		k.dump();
@@ -582,6 +600,18 @@ public:
 			if(key_match(k, s))
 				keys.insert(s);
 		return keys;
+	}
+
+	template<size_t Size>
+	bool has(const key<Size>& k)
+	{
+		return has(str(k));
+	}
+
+	template<size_t Size>
+	str_vec get_vec(const key<Size>& k)
+	{
+		return get_vec(str(k));
 	}
 
 	/**

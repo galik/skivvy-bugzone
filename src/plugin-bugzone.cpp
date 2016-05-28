@@ -46,6 +46,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/utils.h>
 #include <skivvy/logrep.h>
 
+
 //#include <pcrecpp.h>
 
 namespace skivvy { namespace bugzone {
@@ -57,7 +58,7 @@ using namespace sookee::bug;
 
 using namespace skivvy;
 using namespace skivvy::irc;
-//using namespace skivvy::types;
+using namespace skivvy::utils;
 using namespace skivvy::ircbot;
 
 //using namespace pcrecpp;
@@ -69,19 +70,21 @@ PLUGIN_INFO("bugzone", "Bug Tracker", "0.0");
 const str STORE_FILE_KEY = "bugzone.store.file";
 const str DEFAULT_STORE_FILE = "bugzone-store.txt";
 
-// store keys and key parts
-const str BUG_ENTRY_PREFIX = "bug.entry.";
+const auto BUG_VERSION_KEY = store2::make_whole_key("bugzone", "version");
 
-const str BUG_DESC_PREFIX = "bug.desc.";
-const str BUG_PERP_PREFIX = "bug.perp.";
-const str BUG_STAT_PREFIX = "bug.stat.";
-const str BUG_NOTE_PREFIX = "bug.note.";
-const str BUG_DATE_PREFIX = "bug.date.";
-const str BUG_ASGN_PREFIX = "bug.asgn.";
-const str BUG__MOD_PREFIX = "bug._mod.";
-const str BUG__ETA_PREFIX = "bug._eta.";
-const str BUG_DEPS_PREFIX = "bug.deps."; // depends on
-const str BUG__DUP_PREFIX = "bug._dup."; // duplicate of
+// store keys and key parts
+const auto BUG_ENTRY_PREFIX = store2::make_partial_key<3>("bug", "entry");
+
+const auto BUG_DESC_PREFIX = store2::make_partial_key<3>("bug", "desc");
+const auto BUG_PERP_PREFIX = store2::make_partial_key<3>("bug", "perp");
+const auto BUG_STAT_PREFIX = store2::make_partial_key<3>("bug", "stat");
+const auto BUG_NOTE_PREFIX = store2::make_partial_key<3>("bug", "note");
+const auto BUG_DATE_PREFIX = store2::make_partial_key<3>("bug", "date");
+const auto BUG_ASGN_PREFIX = store2::make_partial_key<3>("bug", "asgn");
+const auto BUG__MOD_PREFIX = store2::make_partial_key<3>("bug", "_mod");
+const auto BUG__ETA_PREFIX = store2::make_partial_key<3>("bug", "_eta");
+const auto BUG_DEPS_PREFIX = store2::make_partial_key<3>("bug", "deps"); // depends on
+const auto BUG__DUP_PREFIX = store2::make_partial_key<3>("bug", "_dup"); // duplicate of
 
 const str BUG_STAT_N = "new";
 const str BUG_STAT_A = "assigned";
@@ -102,7 +105,7 @@ const str BUG_DEV_KEY = "dev";
 
 BugzoneIrcBotPlugin::BugzoneIrcBotPlugin(IrcBot& bot)
 : BasicIrcBotPlugin(bot)
-, store(bot.getf(STORE_FILE_KEY, DEFAULT_STORE_FILE))
+, store(new store2::BackupStore(bot.getf(STORE_FILE_KEY, DEFAULT_STORE_FILE)))
 , chanops(bot, "chanops")
 {
 }
@@ -146,15 +149,15 @@ str BugzoneIrcBotPlugin::get_user(const message& msg)
 void BugzoneIrcBotPlugin::bug_reply(const message& msg, const str& prompt, const str& id)
 {
 	bot.fc_reply(msg, prompt + "    id: " + id);
-	if(store.has(BUG_STAT_PREFIX + id))
-		bot.fc_reply(msg, prompt + "status: " + store.get(BUG_STAT_PREFIX + id));
-	if(store.has(BUG_DATE_PREFIX + id))
-		bot.fc_reply(msg, prompt + "  date: " + store.get(BUG_DATE_PREFIX + id));
-	if(store.has(BUG_DESC_PREFIX + id))
-		bot.fc_reply(msg, prompt + "  desc: " + store.get(BUG_DESC_PREFIX + id));
-	if(store.has(BUG__ETA_PREFIX + id))
-		bot.fc_reply(msg, prompt + "   eta: " + store.get(BUG__ETA_PREFIX + id));
-	for(const str note: store.get_vec((BUG_NOTE_PREFIX + id)))
+	if(store->has(BUG_STAT_PREFIX + id))
+		bot.fc_reply(msg, prompt + "status: " + store->get(BUG_STAT_PREFIX + id));
+	if(store->has(BUG_DATE_PREFIX + id))
+		bot.fc_reply(msg, prompt + "  date: " + store->get(BUG_DATE_PREFIX + id));
+	if(store->has(BUG_DESC_PREFIX + id))
+		bot.fc_reply(msg, prompt + "  desc: " + store->get(BUG_DESC_PREFIX + id));
+	if(store->has(BUG__ETA_PREFIX + id))
+		bot.fc_reply(msg, prompt + "   eta: " + store->get(BUG__ETA_PREFIX + id));
+	for(const str note: store->get_vec((BUG_NOTE_PREFIX + id)))
 		bot.fc_reply(msg, prompt + "  note: " + note);
 }
 
@@ -230,7 +233,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 
 			if(attr == "note") // additive
 			{
-				store.add(BUG_NOTE_PREFIX + id, stamp() + ": " + text);
+				store->add(BUG_NOTE_PREFIX + id, stamp() + ": " + text);
 			}
 			else if(attrs.find(attr) != attrs.end())
 			{
@@ -243,7 +246,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 				}
 				else if(attr == "asgn")
 				{
-					if(!stl::found(store.get_vec(BUG_DEV_KEY), text))
+					if(!stl::found(store->get_vec(BUG_DEV_KEY), text))
 					{
 						bot.fc_reply(msg, REPLY_PROMPT + "Unknown developer: " + text);
 						continue;
@@ -258,7 +261,7 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 						continue;
 					}
 				}
-				store.set("bug." + attr + '.' + id, stamp() + ": " + text);
+				store->set("bug." + attr + '.' + id, stamp() + ": " + text);
 				bot.fc_reply(msg, REPLY_PROMPT + "done.");
 			}
 			else
@@ -291,14 +294,14 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	// bug.note.<id>: Another note
 
 	lock_guard lock(mtx);
-	str id = std::to_string(store.get<siz>("bug.id", 0) + 1);
+	str id = std::to_string(store->get<siz>("bug.id", 0) + 1);
 
-	store.set("bug.id", id);
+	store->set("bug.id", id);
 
-	store.add(BUG_DESC_PREFIX + id, msg.get_user_params());
-	store.add(BUG_PERP_PREFIX + id, user);
-	store.add(BUG_DATE_PREFIX + id, cal::date_t(std::time(0)).format(cal::date_t::FORMAT_ISO_8601));
-	store.add(BUG_STAT_PREFIX + id, BUG_STAT_N);
+	store->add(BUG_DESC_PREFIX + id, msg.get_user_params());
+	store->add(BUG_PERP_PREFIX + id, user);
+	store->add(BUG_DATE_PREFIX + id, cal::date_t(std::time(0)).format(cal::date_t::FORMAT_ISO_8601));
+	store->add(BUG_STAT_PREFIX + id, BUG_STAT_N);
 
 	bot.fc_reply(msg, REPLY_PROMPT + "Your bug has been filed with tracking number #" +id);
 	return true;
@@ -627,9 +630,10 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	str_set ids;
 
 	bug("Adding ids based in stat:");
-	for(const str& key: store.get_keys_if_wild(BUG_STAT_PREFIX + "*"))
+//	for(const str& key: store->get_keys_if_wild(BUG_STAT_PREFIX + "*"))
+	for(const str& key: store->get_keys_that_match(BUG_STAT_PREFIX))
 		for(const str& stat: stats)
-			if(stat == "*" || stat == store.get(key))
+			if(stat == "*" || stat == store->get(key))
 				if(full_match(key, std::regex("bug\\.[^.]+\\.([^:]+)"), id))
 //				if(RE("bug\\.[^.]+\\.([^:]+)").FullMatch(key, &id))
 					{ ids.insert(id); break; }
@@ -638,7 +642,7 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	str store_date;
 	for(str_set::iterator idi = ids.begin(); idi != ids.end();)
 	{
-		store_date = store.get(BUG_DATE_PREFIX + (*idi));
+		store_date = store->get(BUG_DATE_PREFIX + (*idi));
 		bug_var(store_date);
 
 		for(const str& date: dates_eq)
@@ -717,9 +721,9 @@ bool BugzoneIrcBotPlugin::do_feature(const message& msg)
 //		return false;
 //
 //	lock_guard lock(mtx);
-//	siz id = store.get("feature.id", 0);
-//	store.set("feature.id", ++id);
-//	store.add("feature." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
+//	siz id = store->get("feature.id", 0);
+//	store->set("feature.id", ++id);
+//	store->add("feature." + std::to_string(id) + ".new", " \"" + msg.get_user_params() + "\"");
 //	bot.fc_reply(msg, "Your feature request has been filed with tracking number " + std::to_string(id));
 	return true;
 }
@@ -729,7 +733,7 @@ bool BugzoneIrcBotPlugin::do_feature(const message& msg)
 bool BugzoneIrcBotPlugin::initialize()
 {
 	// Commands MUST start with ! (unless they are sent by PM)
-	if(!store.has("bugzone.version") || store.get("bugzone.version") == "0.0")
+	if(!store->has(BUG_VERSION_KEY) || store->get(BUG_VERSION_KEY) == "0.0")
 	{
 		// upgrade
 		log("bugzone: Upgrading store from v0.0 to v0.1");
@@ -739,22 +743,23 @@ bool BugzoneIrcBotPlugin::initialize()
 		siz n;
 		str id, skip, stat, text, user;
 		char c;
-		for(const str& key: store.get_keys_if_wild(BUG_ENTRY_PREFIX + "*"))
+//		for(const str& key: store->get_keys_if_wild(BUG_ENTRY_PREFIX + "*"))
+		for(const str& key: store->get_keys_that_match(BUG_ENTRY_PREFIX))
 		{
 			if(key.size() <= BUG_ENTRY_PREFIX.size())
 				continue;
 			if(!(siss(key.substr(BUG_ENTRY_PREFIX.size())) >> n >> c >> stat))
 				continue;
-			if(!sgl(sgl(siss(store.get(key)) >> user, skip, '"'), text, '"'))
+			if(!sgl(sgl(siss(store->get(key)) >> user, skip, '"'), text, '"'))
 				continue;
 
 			id = std::to_string(n);
-			store.add(BUG_DESC_PREFIX + id, text);
-			store.add(BUG_PERP_PREFIX + id, user);
-			store.add(BUG_STAT_PREFIX + id, stat);
-			store.add(BUG_NOTE_PREFIX + id, "Record upgraded from v0.0 to v0.1 (see date for when)");
-			store.add(BUG_DATE_PREFIX + id, std::to_string(std::time(0)));
-			store.clear(key);
+			store->add(BUG_DESC_PREFIX + id, text);
+			store->add(BUG_PERP_PREFIX + id, user);
+			store->add(BUG_STAT_PREFIX + id, stat);
+			store->add(BUG_NOTE_PREFIX + id, "Record upgraded from v0.0 to v0.1 (see date for when)");
+			store->add(BUG_DATE_PREFIX + id, std::to_string(std::time(0)));
+			store->clear(key);
 		}
 
 		// bug.desc.<id>: Bad stuff happens
@@ -767,7 +772,7 @@ bool BugzoneIrcBotPlugin::initialize()
 		// bug.note.<id>: Some note
 		// bug.note.<id>: Another note
 
-		store.set("bugzone.version", "0.1");
+		store->set(BUG_VERSION_KEY, "0.1");
 	}
 	add
 	({

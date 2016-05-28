@@ -62,7 +62,7 @@ class BugzoneIrcBotPlugin
 {
 private:
 	std::mutex mtx;
-	store2::BackupStore store;
+	store2::StoreUPtr store;
 
 	IrcBotPluginHandle chanops;
 
