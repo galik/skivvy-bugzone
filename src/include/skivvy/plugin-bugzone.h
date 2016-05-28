@@ -36,8 +36,9 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <sookee/bug.h>
 
 #include <skivvy/ircbot.h>
-#include <skivvy/store.h>
+//#include <skivvy/store.h>
 //#include <skivvy/logrep.h>
+#include <skivvy/store-2.0.h>
 
 //#include <skivvy/plugin-chanops.h>
 
@@ -61,7 +62,7 @@ class BugzoneIrcBotPlugin
 {
 private:
 	std::mutex mtx;
-	BackupStore store;
+	store2::BackupStore store;
 
 	IrcBotPluginHandle chanops;
 

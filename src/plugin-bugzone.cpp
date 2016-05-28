@@ -26,6 +26,11 @@ http://www.gnu.org/licenses/gpl-2.0.html
 
 '-----------------------------------------------------------------*/
 
+#include <regex>
+#include <string>
+#include <ctime>
+#include <array>
+
 #include <skivvy/plugin-bugzone.h>
 #include <skivvy/plugin-chanops.h>
 
@@ -41,10 +46,7 @@ http://www.gnu.org/licenses/gpl-2.0.html
 #include <skivvy/utils.h>
 #include <skivvy/logrep.h>
 
-#include <string>
-#include <ctime>
-
-#include <pcrecpp.h>
+//#include <pcrecpp.h>
 
 namespace skivvy { namespace bugzone {
 
@@ -58,7 +60,7 @@ using namespace skivvy::irc;
 //using namespace skivvy::types;
 using namespace skivvy::ircbot;
 
-using namespace pcrecpp;
+//using namespace pcrecpp;
 
 // You MUST have this macro and it MUST name your plugin class
 IRC_BOT_PLUGIN(BugzoneIrcBotPlugin);
@@ -116,7 +118,7 @@ BugzoneIrcBotPlugin::~BugzoneIrcBotPlugin() {}
 
 str BugzoneIrcBotPlugin::get_user(const message& msg)
 {
-	bug_func();
+	bug_fun();
 	bug_var(chanops);
 	str userhost = msg.get_userhost();
 	// chanops user | msg.userhost
@@ -304,9 +306,97 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 
 //#define bug_cnt(c) do{bug(#c << ':');for(auto v: c) bug('\t' << v);}while(false)
 
+template<typename T>
+void assign_type(const std::string& s, T& t)
+{
+	std::istringstream(s) >> t;
+}
+
+void assign_type(const std::string& s, std::string& t)
+{
+	t = s;
+}
+
+void set_arg(const std::smatch&, int)
+{
+}
+
+template<typename Arg>
+void set_arg(const std::smatch& m, int i, Arg& arg)
+{
+	assign_type(m.str(i), arg);
+}
+
+template<typename Arg, typename... Args>
+void set_arg(const std::smatch& m, int i, Arg& arg, Args&... args)
+{
+	assign_type(m.str(i), arg);
+	set_arg(m, i + 1, args...);
+}
+
+template<typename... Args>
+bool full_match(const std::string& s, const std::regex& e, Args&... args)
+{
+	std::smatch m;
+	if(!std::regex_match(s,  m,  e))
+		return false;
+
+	set_arg(m, 1, args...);
+
+	return true;
+}
+
+template<size_t SIZE> // full size of whole key
+class store_key
+{
+	str type; // type.k1.k2.kn: record
+	std::vector<str> keys;
+
+	template<size_t ASIZE>
+	store_key(str type, std::array<str, ASIZE> arr,
+		typename std::enable_if<ASIZE <= SIZE, bool>::type = false)
+	: type(type), keys(arr.begin(), arr.end())
+	{
+//		bug_fun();
+	}
+
+public:
+	template<typename... Args>
+	store_key(str type, Args&&... args)
+	: store_key(type, std::array<str, sizeof...(Args)>({std::forward<Args>(args)...}))
+	{
+//		bug_fun();
+	}
+
+	constexpr uns size() const { return SIZE; }
+
+	operator std::string() const
+	{
+		auto sep = "";
+		std::string s;
+		for(auto const& key: keys)
+		{
+			s += sep + key;
+			sep = ".";
+		}
+		return s + partial() ? ".*":"";
+	}
+
+	bool full() const { return keys.size() == SIZE; }
+	bool partial() const { return !full(); }
+
+	void dump() const
+	{
+		bug_fun();
+		bug_var(type);
+		bug_cnt(keys);
+	}
+};
+
 bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 {
 	BUG_COMMAND(msg);
+	store_key<3> delete_me("bug");
 	// !buglist *(new|fixed|dead|dups) - list bugs if associated with caller
 
 	// !blist +stat = new, dead +stat = fixed +date <= (now|date)
@@ -363,10 +453,19 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 			// date <= <date>
 			str oper, date;
 
-			if(!RE("([^<=>]+)(<=|>=|<|>|=)([^<=>]+)").FullMatch(line, &attr, &oper, &date))
 			{
-				bot.fc_reply(msg, REPLY_PROMPT + "Expected: +date (<=|>=|<|>|=) 31/12/9999");
-				continue;
+				std::smatch m;
+				std::regex e("([^<=>]+)(<=|>=|<|>|=)([^<=>]+)");
+	//			if(!RE("([^<=>]+)(<=|>=|<|>|=)([^<=>]+)").FullMatch(line, &attr, &oper, &date))
+				if(!std::regex_match(line, m, e))
+				{
+					bot.fc_reply(msg, REPLY_PROMPT + "Expected: +date (<=|>=|<|>|=) 31/12/9999");
+					continue;
+				}
+
+				attr = m.str(1);
+				oper = m.str(2);
+				date = m.str(3);
 			}
 
 			trim(attr);
@@ -406,7 +505,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				if(nopers.count(oper))
 					oper = nopers.at(oper);
 			}
-			else if(RE("(\\d+)\\s+days?").FullMatch(date, &d))
+//			else if(RE("(\\d+)\\s+days?").FullMatch(date, &d))
+			else if(full_match(date, std::regex("(\\d+)\\s+days?"), d))
 			{
 				if(d > 6)
 				{
@@ -421,7 +521,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				if(nopers.count(oper))
 					oper = nopers.at(oper);
 			}
-			else if(RE("(\\d+)\\s+weeks?").FullMatch(date, &d))
+//			else if(RE("(\\d+)\\s+weeks?").FullMatch(date, &d))
+			else if(full_match(date, std::regex("(\\d+)\\s+weeks?"), d))
 			{
 				if(d > 4)
 				{
@@ -437,7 +538,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				if(nopers.count(oper))
 					oper = nopers.at(oper);
 			}
-			else if(RE("(\\d+)\\s+months?").FullMatch(date, &d))
+//			else if(RE("(\\d+)\\s+months?").FullMatch(date, &d))
+			else if(full_match(date, std::regex("(\\d+)\\s+months?"), d))
 			{
 				if(d > 12)
 				{
@@ -452,7 +554,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				if(nopers.count(oper))
 					oper = nopers.at(oper);
 			}
-			else if(RE("(\\d+)\\s+years?").FullMatch(date, &d))
+//			else if(RE("(\\d+)\\s+years?").FullMatch(date, &d))
+			else if(full_match(date, std::regex("(\\d+)\\s+years?"), d))
 			{
 				cal::date_t cdate(time(0));
 				while(--d)
@@ -462,11 +565,13 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 				if(nopers.count(oper))
 					oper = nopers.at(oper);
 			}
-			else if(RE("\\d{4}-\\d{2}-\\d{2}").FullMatch(date))
+//			else if(RE("\\d{4}-\\d{2}-\\d{2}").FullMatch(date))
+			else if(full_match(date, std::regex("\\d{4}-\\d{2}-\\d{2}")))
 			{
 				bug("PERFECT FORMAT: " << date);
 			}
-			else if(RE("(\\d{1,2})[-/](\\d{1,2})[-/](\\d{2,4})").FullMatch(date, &d, &m, &y))
+//			else if(RE("(\\d{1,2})[-/](\\d{1,2})[-/](\\d{2,4})").FullMatch(date, &d, &m, &y))
+			else if(full_match(date, std::regex("(\\d{1,2})[-/](\\d{1,2})[-/](\\d{2,4})"), d, m, y))
 			{
 				soss oss;
 				y = y < 100 ? 2000 + y : y;
@@ -525,7 +630,8 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 	for(const str& key: store.get_keys_if_wild(BUG_STAT_PREFIX + "*"))
 		for(const str& stat: stats)
 			if(stat == "*" || stat == store.get(key))
-				if(RE("bug\\.[^.]+\\.([^:]+)").FullMatch(key, &id))
+				if(full_match(key, std::regex("bug\\.[^.]+\\.([^:]+)"), id))
+//				if(RE("bug\\.[^.]+\\.([^:]+)").FullMatch(key, &id))
 					{ ids.insert(id); break; }
 
 	bug("Erasing keys based in date:");
@@ -665,8 +771,13 @@ bool BugzoneIrcBotPlugin::initialize()
 	}
 	add
 	({
+		// !bug <text> - enter a new bug with description <text>
+		// !bug #n - display a curent bug #n by number.
+		// !bug #n +(note|eta|status|assign|mod|dup) <text> - add notes, change status, eta etc...
 		"!bug"
-		, "!bug <description> Record a bug"
+		, "<text>                                         Enter a new bug with description <text>."
+		  "\n #n                                          Display bug #n by number."
+		  "\n #n +(note|eta|status|assign|mod|dup) <text> Add note, eta etc..."
 		, [&](const message& msg){ do_bug(msg); }
 	});
 	add
