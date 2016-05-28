@@ -96,6 +96,9 @@ const str BUG_STAT_F = "fixed";
 
 const auto BUG_DEV_KEY = store2::make_whole_key("dev");
 
+const auto BUG_LAST_ID_KEY = BUG_PREFIX/"last"/"id";
+
+
 // bug.desc.<id>: Bad stuff happens
 // bug.perp.<id>: sookee|~SooKee@SooKee.users.quakenet.org
 // bug.stat.<id>: new|fixed|wontfix|etc...
@@ -306,9 +309,9 @@ bool BugzoneIrcBotPlugin::do_bug(const message& msg)
 	// bug.note.<id>: Another note
 
 	lock_guard lock(mtx);
-	str id = to_id(store->get(BUG_PREFIX/"last"/"id", 0) + 1);
+	str id = to_id(store->get(BUG_LAST_ID_KEY, 0) + 1);
 
-	store->set(BUG_PREFIX/"last"/"id", id);
+	store->set(BUG_LAST_ID_KEY, id);
 
 	store->add(BUG_DESC_PREFIX/id, msg.get_user_params());
 	store->add(BUG_PERP_PREFIX/id, user);

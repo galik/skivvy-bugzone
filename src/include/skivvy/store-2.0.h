@@ -302,8 +302,9 @@ private:
 
 		auto nk = new_key.begin();
 		auto ek = new_key.end();
+		auto e = keys.end();
 
-		for(auto k = keys.begin(); nk != ek; ++k, ++nk)
+		for(auto k = keys.begin(); nk != ek && k != e; ++k, ++nk)
 			*nk = *k;
 
 		return new_key;
@@ -349,6 +350,13 @@ public:
 	{
 		static_assert(N < WholeSize, "partial key must be smaller than key");
 		return left_key<WholeSize, N>();
+	}
+
+	template<size_t N>
+	basic_key<N> extended_key()
+	{
+		static_assert(N > WholeSize, "extended key must be larger than key");
+		return left_key<N, N>();
 	}
 
 	template<size_t N>
