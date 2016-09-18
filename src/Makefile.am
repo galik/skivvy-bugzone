@@ -44,7 +44,8 @@ AM_CXXFLAGS = $(GEN_FLAGS) $(DEF_FLAGS) -std=gnu++11
 PLUGIN_FLAGS = -Wl,-E
 
 plugin_include_HEADERS = \
-	$(srcdir)/include/skivvy/plugin-bugzone.h
+	$(srcdir)/include/skivvy/plugin-bugzone.h \
+	$(srcdir)/include/skivvy/store-2.0.h
 
 plugin_library_LTLIBRARIES =  \
 	skivvy-plugin-bugzone.la

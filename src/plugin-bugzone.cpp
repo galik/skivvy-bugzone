@@ -76,7 +76,7 @@ const auto BUG_VERSION_KEY = store2::make_whole_key("bugzone", "version");
 const auto BUG_PREFIX = store2::make_partial_key<3>("bug");
 
 
-const auto BUG_ENTRY_PREFIX = BUG_PREFIX/"entry"; //store2::make_partial_key<3>("bug", "entry");
+const auto BUG_ENTRY_PREFIX = BUG_PREFIX.extended_key<4>()/"entry"; //store2::make_partial_key<3>("bug", "entry");
 
 const auto BUG_DESC_PREFIX = BUG_PREFIX/"desc";
 const auto BUG_PERP_PREFIX = BUG_PREFIX/"perp";
@@ -130,12 +130,14 @@ str BugzoneIrcBotPlugin::get_user(const message& msg)
 	bug_fun();
 	bug_var(chanops);
 	str userhost = msg.get_userhost();
+	bug_var(userhost);
 	// chanops user | msg.userhost
 
-	if(chanops && chanops->api(ChanopsApi::is_userhost_logged_in, {userhost}).empty())
+	if(chanops && !chanops->api(ChanopsApi::is_userhost_logged_in, {userhost}).empty())
 	{
 		str_vec r = chanops->api(ChanopsApi::get_userhost_username, {userhost});
-		if(!r.empty())
+		bug_cnt(r);
+		if(!r.empty() && !r[0].empty())
 			return r[0];
 	}
 
@@ -646,16 +648,16 @@ bool BugzoneIrcBotPlugin::do_buglist(const message& msg)
 
 	bug("Adding ids based in stat:");
 //	for(const str& key: store->get_keys_if_wild(BUG_STAT_PREFIX + "*"))
-	for(const str& key: store->get_keys_that_match(BUG_STAT_PREFIX))
+//	for(const str& key: store->get_keys_that_match(BUG_STAT_PREFIX))
+	for(const auto& key: store->get_whole_keys_that_match(BUG_STAT_PREFIX))
 		for(const str& stat: stats)
 			if(stat == "*" || stat == store->get(key))
-				if(full_match(key, std::regex("bug\\.[^.]+\\.([^:]+)"), id))
-//				if(RE("bug\\.[^.]+\\.([^:]+)").FullMatch(key, &id))
-					{ ids.insert(id); break; }
+//				if(full_match(key, std::regex("bug\\.[^.]+\\.([^:]+)"), id))
+					{ ids.insert(key[2]); break; }
 
 	bug("Erasing keys based in date:");
 	str store_date;
-	for(str_set::iterator idi = ids.begin(); idi != ids.end();)
+	for(auto idi = ids.begin(); idi != ids.end();)
 	{
 		store_date = store->get(BUG_DATE_PREFIX/(*idi));
 		bug_var(store_date);
@@ -755,23 +757,24 @@ bool BugzoneIrcBotPlugin::initialize()
 
 		// bug.entry.<id>.<state>: <user> "<message"
 
-		siz n;
+//		siz n;
 		str id, skip, stat, text, user;
-		char c;
+//		char c;
 //		for(const str& key: store->get_keys_if_wild(BUG_ENTRY_PREFIX + "*"))
-		for(const str& key: store->get_keys_that_match(BUG_ENTRY_PREFIX))
+//		for(const str& key: store->get_keys_that_match(BUG_ENTRY_PREFIX))
+		for(const auto& key: store->get_whole_keys_that_match(BUG_ENTRY_PREFIX))
 		{
-			if(key.size() <= BUG_ENTRY_PREFIX.size())
-				continue;
-			if(!(siss(key.substr(BUG_ENTRY_PREFIX.size())) >> n >> c >> stat))
-				continue;
+//			if(key.size() <= BUG_ENTRY_PREFIX.size())
+//				continue;
+//			if(!(siss(key.substr(BUG_ENTRY_PREFIX.size())) >> n >> c >> stat))
+//				continue;
 			if(!sgl(sgl(siss(store->get(key)) >> user, skip, '"'), text, '"'))
 				continue;
 
-			id = to_id(n);
+			id = key[2];//to_id(n);
 			store->add(BUG_DESC_PREFIX/id, text);
 			store->add(BUG_PERP_PREFIX/id, user);
-			store->add(BUG_STAT_PREFIX/id, stat);
+			store->add(BUG_STAT_PREFIX/id, key[3]);//stat);
 			store->add(BUG_NOTE_PREFIX/id, "Record upgraded from v0.0 to v0.1 (see date for when)");
 			store->add(BUG_DATE_PREFIX/id, std::to_string(std::time(0)));
 			store->clear(key);

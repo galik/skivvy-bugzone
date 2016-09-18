@@ -296,7 +296,7 @@ private:
 	template<size_t M, size_t N>
 	basic_key<M, N> left_key() const
 	{
-		static_assert(N <= M, "left key must be smaller than key");
+//		static_assert(N <= M, "left key must be smaller than key");
 
 		basic_key<M, N> new_key;
 
@@ -346,25 +346,32 @@ public:
 	bool partial() const { return !full(); }
 
 	template<size_t N>
-	basic_key<WholeSize, N> partial_key()
+	basic_key<WholeSize, N> partial_key() const
 	{
 		static_assert(N < WholeSize, "partial key must be smaller than key");
 		return left_key<WholeSize, N>();
 	}
 
 	template<size_t N>
-	basic_key<N> extended_key()
+	basic_key<N> extended_key() const
 	{
 		static_assert(N > WholeSize, "extended key must be larger than key");
 		return left_key<N, N>();
 	}
 
 	template<size_t N>
-	basic_key<N> sub_key()
+	basic_key<N> sub_key() const
 	{
 		static_assert(N <= WholeSize, "subkey larger than key");
 		return left_key<N, N>();
 	}
+
+	basic_key<WholeSize> whole_copy() const
+	{
+		return left_key<WholeSize, WholeSize>();
+	}
+
+	bool operator<(const basic_key& k) const { return keys < k.keys; }
 
 //	template<size_t M, size_t N>
 	basic_key<WholeSize, PartialSize + 1> operator/(const str& field) const
@@ -374,7 +381,7 @@ public:
 		return key;
 	}
 
-	void parse(const str& s, char delim = '.')
+	bool parse(const str& s, char delim = '.')
 	{
 		const auto done = s.end();
 		auto end = s.begin();
@@ -387,14 +394,15 @@ public:
 			end = std::find_if(pos, done, [delim](char c){return c == delim;});
 			k->assign(pos, end);
 			if((k = std::next(k)) == e)
-				throw "";
+				return false;
 		}
+		return true;
 	}
 
-	void parse(const str& s, const str& delim)
-	{
-
-	}
+//	void parse(const str& s, const str& delim)
+//	{
+//
+//	}
 
 	void dump() const
 	{
@@ -611,10 +619,24 @@ public:
 	}
 
 	template<size_t WholeSize, size_t PartialSize>
+	auto get_whole_keys_that_match(const basic_key<WholeSize, PartialSize>& k)
+	{
+		std::set<whole_key<WholeSize>> keys;
+		for(const auto& s: get_keys())
+		{
+			if(key_match(k, s))
+			{
+				auto key = k.whole_copy();
+				if(key.parse(s))
+					keys.insert(key);
+			}
+		}
+		return keys;
+	}
+
+	template<size_t WholeSize, size_t PartialSize>
 	str_set get_keys_that_match(const basic_key<WholeSize, PartialSize>& k)
 	{
-//		bug_fun();
-//		k.dump();
 		str_set keys;
 		for(const auto& s: get_keys())
 			if(key_match(k, s))
@@ -718,6 +740,12 @@ public:
 			insert_it = t;
 		}
 		return c;
+	}
+
+	template<size_t Size>
+	void clear(const key<Size>& k)
+	{
+		clear(str(k));
 	}
 
 	/**
